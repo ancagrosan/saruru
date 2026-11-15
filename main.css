@@ -68,6 +68,7 @@ h1 {
 .words {
     margin-top: 4vw;
     display: flex;
+    flex-wrap: wrap;
     gap: 8px 32px;
     font-size: 0.875rem;
     letter-spacing: 0.2em;

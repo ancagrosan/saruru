@@ -13,24 +13,24 @@ const COLORS = {
   salt: color("--salt"),
 };
 
-// Layout as fractions of the viewport: where the stream falls, where the water
-// starts (from the top), and how far the water fades in from the left.
+// Layout as fractions of the viewport: the center and width of the area the salt
+// falls over, where the water starts (from the top), and how far it fades in from the left.
 const LAYOUT = {
-  wide: { streamX: 0.76, waterTop: 0.82, fadeFrom: 0.3, fadeTo: 0.68 },
-  narrow: { streamX: 0.78, waterTop: 0.84, fadeFrom: 0.2, fadeTo: 0.6 },
+  wide: { streamX: 0.76, spread: 0.06, waterTop: 0.82, fadeFrom: 0.3, fadeTo: 0.68 },
+  narrow: { streamX: 0.78, spread: 0.08, waterTop: 0.84, fadeFrom: 0.2, fadeTo: 0.6 },
 };
 
 const CONFIG = {
   grainsPerFrame: 9,
-  rampSeconds: 1.6,
-  gravity: 0.22,
-  maxFallSpeed: 11,
-  rippleChance: 0.008,
+  rampSeconds: 2.4,
+  gravity: 0.06,
+  maxFallSpeed: 9,
+  rippleChance: 0.006,
   maxRipples: 14,
   rippleSeconds: 2.6,
 };
 
-let width, height, dpr, layout, streamX, waterTop;
+let width, height, dpr, layout, streamX, spread, waterTop;
 let grains, ripples, elapsed, lastTime, rafId;
 
 // Roughly normal distribution in [-1, 1].
@@ -47,6 +47,7 @@ function init() {
 
   layout = width < 700 ? LAYOUT.narrow : LAYOUT.wide;
   streamX = width * layout.streamX;
+  spread = width * layout.spread;
   waterTop = height * layout.waterTop;
 
   grains = [];
@@ -66,12 +67,15 @@ function spawnGrains(dt) {
   const ramp = Math.min(1, elapsed / CONFIG.rampSeconds);
   const count = Math.round(CONFIG.grainsPerFrame * ramp * dt + Math.random());
   for (let i = 0; i < count; i++) {
+    const z = 0.6 + Math.random() * 0.4; // "distance": smaller grains are slower
     grains.push({
-      x: streamX + gauss() * 9,
+      x: streamX + gauss() * spread,
       y: -8,
-      vx: gauss() * 0.14,
-      vy: 2 + Math.random() * 2,
-      r: 1.3 + Math.random() * 1.5,
+      vy: 1 + Math.random(),
+      z,
+      r: (2 + Math.random() * 1.6) * z,
+      phase: Math.random() * TAU, // gentle side-to-side drift
+      sway: 0.15 + Math.random() * 0.2,
       depth: 8 + Math.random() * 20, // how far it sinks before vanishing
     });
   }
@@ -88,8 +92,8 @@ function update(dt) {
 
   for (let i = grains.length - 1; i >= 0; i--) {
     const g = grains[i];
-    g.vy = Math.min(g.vy + CONFIG.gravity * dt, CONFIG.maxFallSpeed);
-    g.x += g.vx * dt;
+    g.vy = Math.min(g.vy + CONFIG.gravity * dt, CONFIG.maxFallSpeed * g.z);
+    g.x += Math.sin(g.phase + g.y * 0.02) * g.sway * dt;
     g.y += g.vy * dt;
     if (g.y < waterTop + g.depth) continue;
 
@@ -171,7 +175,8 @@ function drawGrains() {
   const air = grains.filter((g) => g.y <= waterTop);
   const sinking = grains.filter((g) => g.y > waterTop);
 
-  fillGrains(air, COLORS.ink, 0.22, 0.5, 1.2, 0.3); // soft shadow keeps grains distinct
+  fillGrains(air, COLORS.ink, 0.18, 0.4, 1.2, 0.3); // soft shadow
+  fillGrains(air, COLORS.ink, 0.35, 0, 0, 0.6); // thin outline keeps each grain distinct
   fillGrains(air, COLORS.salt, 1);
 
   for (const g of sinking) {
