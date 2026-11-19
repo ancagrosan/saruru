@@ -1,5 +1,6 @@
 const canvas = document.getElementById("salt");
 const ctx = canvas.getContext("2d");
+const hand = document.getElementById("hand");
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const TAU = Math.PI * 2;
 
@@ -13,28 +14,61 @@ const COLORS = {
   salt: color("--salt"),
 };
 
-// Layout as fractions of the viewport: the center and width of the area the salt
-// falls over, where the water starts (from the top), and how far it fades in from the left.
+// Layout as fractions of the viewport. tipX/tipY: where the fingertips are.
+// waterTop: where the water starts. fadeFrom/fadeTo: how the water fades in from the left.
+// handWidth: hand size in px, as a fraction of the viewport width with a max.
 const LAYOUT = {
-  wide: { streamX: 0.76, spread: 0.06, waterTop: 0.82, fadeFrom: 0.3, fadeTo: 0.68 },
-  narrow: { streamX: 0.78, spread: 0.08, waterTop: 0.84, fadeFrom: 0.2, fadeTo: 0.6 },
+  wide: {
+    tipX: 0.72,
+    tipY: 0.34,
+    waterTop: 0.82,
+    fadeFrom: 0.3,
+    fadeTo: 0.68,
+    handWidth: [0.34, 520],
+  },
+  narrow: {
+    tipX: 0.42,
+    tipY: 0.5,
+    waterTop: 0.84,
+    fadeFrom: 0.2,
+    fadeTo: 0.6,
+    handWidth: [0.95, 420],
+  },
 };
 
+// assets/hand.svg: where the salt leaves the fingertips (SVG units, from the comment at the
+// top of the file), and how many SVG units wide the drawn hand is (arm excluded) for sizing.
+const HAND = { tip: { x: 39.6, y: 99.4 }, drawnWidth: 560 };
+
 const CONFIG = {
-  grainsPerFrame: 9,
-  rampSeconds: 2.4,
-  gravity: 0.06,
-  maxFallSpeed: 9,
-  rippleChance: 0.006,
+  startDelaySeconds: 0.7, // the hand slides in first, then the salt starts
+  rampSeconds: 0.5,
+  grainsPerFrame: 12,
+  gravity: 0.35,
+  maxFallSpeed: 13,
+  fan: 0.8, // sideways spread of the pour
+  drift: -0.3, // leans left, away from the hand
+  rippleChance: 0.005,
   maxRipples: 14,
   rippleSeconds: 2.6,
 };
 
-let width, height, dpr, layout, streamX, spread, waterTop;
+let width, height, dpr, layout, tipX, tipY, waterTop;
 let grains, ripples, elapsed, lastTime, rafId;
 
 // Roughly normal distribution in [-1, 1].
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+
+// Sizes the hand and moves it so its fingertips sit exactly on (tipX, tipY).
+function placeHand() {
+  if (!hand.naturalWidth) return; // image not loaded (yet)
+  const [fraction, max] = layout.handWidth;
+  const scale = Math.min(width * fraction, max) / HAND.drawnWidth;
+  hand.style.width = `${hand.naturalWidth * scale}px`;
+  hand.style.height = `${hand.naturalHeight * scale}px`;
+  hand.style.left = `${tipX - HAND.tip.x * scale}px`;
+  hand.style.top = `${tipY - HAND.tip.y * scale}px`;
+}
 
 function init() {
   cancelAnimationFrame(rafId);
@@ -46,13 +80,14 @@ function init() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   layout = width < 700 ? LAYOUT.narrow : LAYOUT.wide;
-  streamX = width * layout.streamX;
-  spread = width * layout.spread;
+  tipX = width * layout.tipX;
+  tipY = height * layout.tipY;
   waterTop = height * layout.waterTop;
+  placeHand();
 
   grains = [];
   ripples = [];
-  elapsed = reduceMotion ? CONFIG.rampSeconds : 0;
+  elapsed = reduceMotion ? CONFIG.rampSeconds : -CONFIG.startDelaySeconds;
   lastTime = performance.now();
 
   if (reduceMotion) {
@@ -63,19 +98,24 @@ function init() {
   }
 }
 
+// The pour is not perfectly even: it swells and thins a little.
+function pourRate() {
+  const ramp = Math.min(1, Math.max(0, elapsed / CONFIG.rampSeconds));
+  const swell = 0.7 + 0.2 * Math.sin(elapsed * 3.1) + 0.1 * Math.sin(elapsed * 7.3);
+  return CONFIG.grainsPerFrame * ramp * swell;
+}
+
 function spawnGrains(dt) {
-  const ramp = Math.min(1, elapsed / CONFIG.rampSeconds);
-  const count = Math.round(CONFIG.grainsPerFrame * ramp * dt + Math.random());
-  for (let i = 0; i < count; i++) {
-    const z = 0.6 + Math.random() * 0.4; // "distance": smaller grains are slower
+  const count = Math.round(pourRate() * dt + Math.random());
+  for (let i = 0; i < count && elapsed >= 0; i++) {
+    const z = 0.7 + Math.random() * 0.3; // grain "weight": smaller grains are slower
     grains.push({
-      x: streamX + gauss() * spread,
-      y: -8,
-      vy: 1 + Math.random(),
+      x: tipX + gauss() * 3,
+      y: tipY + 4,
+      vx: gauss() * CONFIG.fan + CONFIG.drift,
+      vy: 3 + Math.random() * 2,
       z,
-      r: (2 + Math.random() * 1.6) * z,
-      phase: Math.random() * TAU, // gentle side-to-side drift
-      sway: 0.15 + Math.random() * 0.2,
+      r: (1.1 + Math.random() * 1.4) * z,
       depth: 8 + Math.random() * 20, // how far it sinks before vanishing
     });
   }
@@ -93,7 +133,7 @@ function update(dt) {
   for (let i = grains.length - 1; i >= 0; i--) {
     const g = grains[i];
     g.vy = Math.min(g.vy + CONFIG.gravity * dt, CONFIG.maxFallSpeed * g.z);
-    g.x += Math.sin(g.phase + g.y * 0.02) * g.sway * dt;
+    g.x += g.vx * dt;
     g.y += g.vy * dt;
     if (g.y < waterTop + g.depth) continue;
 
@@ -198,4 +238,9 @@ addEventListener("resize", () => {
   resizeTimer = setTimeout(init, 200);
 });
 
-init();
+// Start once the hand image is ready, so it can be measured.
+if (hand.complete) init();
+else {
+  hand.addEventListener("load", init, { once: true });
+  hand.addEventListener("error", init, { once: true });
+}
