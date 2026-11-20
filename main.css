@@ -1,7 +1,7 @@
 :root {
-    --tatami: #D6D3AE;
-    --tatami-dark: #A8AD82;
-    --ink: #3A3A28;
+    --blue: #526865;
+    --blue-dark: #264848;
+    --oat: #e5e2c6;
     --accent: #8C5E3C;
     --salt: #FCFBF6;
     --font-serif: 'Cormorant Garamond', Georgia, serif;
@@ -15,8 +15,8 @@ body {
 }
 
 body {
-    background: var(--tatami);
-    color: var(--ink);
+    background: var(--blue);
+    color: var(--oat);
     font-family: var(--font-sans);
     overflow-x: hidden;
 }
@@ -66,7 +66,7 @@ h1 {
     height: 1px;
     margin: 3vw 0;
     border: 0;
-    background: var(--accent);
+    background: var(--oat);
 }
 
 .about {

@@ -8,9 +8,9 @@ const TAU = Math.PI * 2;
 const css = getComputedStyle(document.documentElement);
 const color = (name) => css.getPropertyValue(name).trim();
 const COLORS = {
-  bg: color("--tatami"),
-  water: color("--tatami-dark"),
-  ink: color("--ink"),
+  bg: color("--blue"),
+  water: color("--blue-dark"),
+  oat: color("--oat"),
   salt: color("--salt"),
 };
 
@@ -215,8 +215,8 @@ function drawGrains() {
   const air = grains.filter((g) => g.y <= waterTop);
   const sinking = grains.filter((g) => g.y > waterTop);
 
-  fillGrains(air, COLORS.ink, 0.18, 0.4, 1.2, 0.3); // soft shadow
-  fillGrains(air, COLORS.ink, 0.35, 0, 0, 0.6); // thin outline keeps each grain distinct
+  fillGrains(air, COLORS.oat, 0.18, 0.4, 1.2, 0.3); // soft shadow
+  fillGrains(air, COLORS.oat, 0.35, 0, 0, 0.6); // thin outline keeps each grain distinct
   fillGrains(air, COLORS.salt, 1);
 
   for (const g of sinking) {
