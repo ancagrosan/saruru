@@ -9,8 +9,7 @@ const css = getComputedStyle(document.documentElement);
 const color = (name) => css.getPropertyValue(name).trim();
 const COLORS = {
   bg: color("--blue"),
-  water: color("--blue-dark"),
-  oat: color("--oat"),
+  deep: color("--blue-dark"), // the water, and the shadow under each grain
   salt: color("--salt"),
 };
 
@@ -29,15 +28,15 @@ const LAYOUT = {
   narrow: {
     tipX: 0.42,
     tipY: 0.5,
-    waterTop: 0.84,
+    waterTop: 0.8,
     fadeFrom: 0.2,
     fadeTo: 0.6,
     handWidth: [0.95, 420],
   },
 };
 
-// assets/hand.svg: where the salt leaves the fingertips (SVG units, from the comment at the
-// top of the file), and how many SVG units wide the drawn hand is (arm excluded) for sizing.
+// assets/images/hand.svg: where the salt leaves the fingertips (SVG units, from the comment at
+// the top of the file), and how many SVG units wide the drawn hand is (arm excluded) for sizing.
 const HAND = { tip: { x: 39.6, y: 99.4 }, drawnWidth: 560 };
 
 const CONFIG = {
@@ -64,17 +63,24 @@ function placeHand() {
   if (!hand.naturalWidth) return; // image not loaded (yet)
   const [fraction, max] = layout.handWidth;
   const scale = Math.min(width * fraction, max) / HAND.drawnWidth;
-  hand.style.width = `${hand.naturalWidth * scale}px`;
-  hand.style.height = `${hand.naturalHeight * scale}px`;
-  hand.style.left = `${tipX - HAND.tip.x * scale}px`;
+  const left = tipX - HAND.tip.x * scale;
+
+  hand.style.left = `${left}px`;
   hand.style.top = `${tipY - HAND.tip.y * scale}px`;
+  // The arm is very long, so it is cropped at the screen edge (object-fit: cover in main.css)
+  // rather than sticking out: on phones, content wider than the screen makes the page zoom out.
+  hand.style.width = `${Math.min(hand.naturalWidth * scale, width - left)}px`;
+  hand.style.height = `${hand.naturalHeight * scale}px`;
+  hand.classList.add("ready"); // only now is it shown, and its slide-in starts
 }
 
 function init() {
   cancelAnimationFrame(rafId);
   dpr = Math.min(devicePixelRatio || 1, 2);
-  width = innerWidth;
-  height = innerHeight;
+  // The canvas is 100lvh tall in main.css, so these stay constant when a phone's address
+  // bar slides in and out. (window.innerHeight does not.)
+  width = canvas.clientWidth;
+  height = canvas.clientHeight;
   canvas.width = width * dpr;
   canvas.height = height * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -167,7 +173,7 @@ function fadeIn(to) {
 }
 
 function drawWater() {
-  ctx.fillStyle = fadeIn(COLORS.water);
+  ctx.fillStyle = fadeIn(COLORS.deep);
   ctx.fillRect(0, waterTop, width, height - waterTop);
   ctx.globalAlpha = 0.5;
   ctx.fillStyle = fadeIn(COLORS.salt);
@@ -215,8 +221,9 @@ function drawGrains() {
   const air = grains.filter((g) => g.y <= waterTop);
   const sinking = grains.filter((g) => g.y > waterTop);
 
-  fillGrains(air, COLORS.oat, 0.18, 0.4, 1.2, 0.3); // soft shadow
-  fillGrains(air, COLORS.oat, 0.35, 0, 0, 0.6); // thin outline keeps each grain distinct
+  // Dark teal (not the light oat color) so each white grain keeps a visible edge on the blue.
+  fillGrains(air, COLORS.deep, 0.3, 0.4, 1.2, 0.3); // soft shadow
+  fillGrains(air, COLORS.deep, 0.5, 0, 0, 0.6); // thin outline keeps each grain distinct
   fillGrains(air, COLORS.salt, 1);
 
   for (const g of sinking) {
@@ -232,10 +239,14 @@ function draw() {
   drawGrains();
 }
 
+// Phones fire "resize" whenever the address bar slides away while scrolling. The canvas keeps
+// its size then, so only start over when the size really changed (rotation, window resize).
 let resizeTimer;
 addEventListener("resize", () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(init, 200);
+  resizeTimer = setTimeout(() => {
+    if (canvas.clientWidth !== width || canvas.clientHeight !== height) init();
+  }, 200);
 });
 
 // Start once the hand image is ready, so it can be measured.
